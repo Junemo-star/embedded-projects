@@ -2,8 +2,8 @@ import pandas as pd
 import urllib.parse  # สำหรับจัดการ URL
 
 # === Config Google Sheet ===
-SHEET_ID = "15SaQPlVWDZbGQcpk1IvPDMQrq47G59G1ag0NpjE96s8"  # แก้เป็นของคุณ
-SHEET_NAME = "Sheet1"
+SHEET_ID = "1hG39pDzG4SwE7bt25cvD9KzF4K9K4pYq302sGu5eWOg"  # แก้เป็นของคุณ
+SHEET_NAME = "product"
 # คอลัมน์ที่เก็บ Barcode เช่น 'A', 'B', 'C'
 BARCODE_COLUMN = "A"
 
@@ -13,11 +13,8 @@ def find_barcode_online(barcode_data):
     ฟังก์ชันสำหรับค้นหา barcode แบบ real-time จาก Google Sheet โดยตรง
     """
     try:
-        # สร้าง Query Language เพื่อสั่งให้ Google Sheet ค้นหาข้อมูล
-        if barcode_data.isdigit():
-            query = f"SELECT * WHERE {BARCODE_COLUMN} = {barcode_data}"
-        else:
-            query = f"SELECT * WHERE {BARCODE_COLUMN} = '{barcode_data}'"
+        # ✅ บังคับให้ query เป็น string เสมอ
+        query = f"SELECT * WHERE {BARCODE_COLUMN} = '{barcode_data}'"
 
         # เข้ารหัส Query ให้ใช้ใน URL ได้
         encoded_query = urllib.parse.quote(query)
@@ -72,3 +69,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
