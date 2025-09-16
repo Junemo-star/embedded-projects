@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>POS System</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+</head>
+<body class="p-4">
+  <h1>POS System</h1>
+
+  <!-- ปุ่มควบคุมโหมด -->
+  <h3>โหมดการทำงาน</h3>
+  <form method="POST" action="/mode/product" style="display:inline">
+    <button type="submit" class="btn btn-info" {% if mode=="product" %}disabled{% endif %}>
+      🛒 โหมดสินค้า
+    </button>
+  </form>
+
+  <form method="POST" action="/mode/uid" style="display:inline">
+    <button type="submit" class="btn btn-warning"
+            {% if mode=="uid" %}disabled{% endif %}
+            {% if cart|length == 0 %}disabled{% endif %}>
+      💳 รออ่านบัตร
+    </button>
+  </form>
+
+  <form method="POST" action="/mode/cancel" style="display:inline">
+    <button type="submit" class="btn btn-danger"
+            {% if mode!="uid" %}disabled{% endif %}>
+      ❌ ยกเลิกการจ่าย
+    </button>
+  </form>
+  <hr>
+
+  {% if mode == "product" %}
+  <!-- ฟอร์มสแกนบาร์โค้ด -->
+  <form method="POST" action="/scan" class="mb-3">
+    <input type="text" id="barcodeInput" name="barcode" placeholder="Scan barcode"
+           class="form-control" required autofocus>
+    <button type="submit" class="btn btn-primary mt-2">Add</button>
+  </form>
+  {% endif %}
+
+  <!-- แสดงตะกร้า -->
+  <h3>Cart</h3>
+  <ul class="list-group">
+    {% for item in cart %}
+      <li class="list-group-item d-flex justify-content-between align-items-center">
+        {{item.name}} x{{item.qty}} = {{item.price * item.qty}}
+        <div>
+          <form method="POST" action="/cart/update/{{item.barcode}}/add" style="display:inline">
+            <button type="submit" class="btn btn-sm btn-success">+</button>
+          </form>
+          <form method="POST" action="/cart/update/{{item.barcode}}/remove" style="display:inline">
+            <button type="submit" class="btn btn-sm btn-danger">−</button>
+          </form>
+        </div>
+      </li>
+    {% endfor %}
+  </ul>
+  <h4>Total: {{total}}</h4>
+
+  {% if mode == "uid" %}
+  <h3>เข้าสู่โหมด UID</h3>
+  <p id="status">รออ่านบัตร...</p>
+  {% endif %}
+
+  <script>
+    const socket = io();
+    let currentUID = null;
+
+    socket.on("uid_detected", data => {
+      currentUID = data.uid;
+      if(data.name){
+        document.getElementById("status").innerText =
+          "👤 ผู้ใช้: " + data.name + " → รอรหัสผ่าน...";
+      } else {
+        document.getElementById("status").innerText =
+          "❌ ไม่พบผู้ใช้ (UID: " + currentUID + ")";
+      }
+    });
+
+    socket.on("pwd_detected", data => {
+      if(currentUID){
+        socket.emit("auth_user", {uid: currentUID, password: data.password});
+      }
+    });
+
+    socket.on("auth_result", data => {
+      alert(data.msg);
+      if(data.success){
+        window.location.href = "/";
+      } else {
+        document.getElementById("status").innerText =
+          "❌ " + data.msg + " → รอใหม่...";
+      }
+    });
+
+    // Autofocus ช่องสแกนบาร์โค้ด
+    const barcodeInput = document.getElementById("barcodeInput");
+    if(barcodeInput){ barcodeInput.focus(); }
+  </script>
+</body>
+</html>
