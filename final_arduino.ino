@@ -32,7 +32,6 @@ Keypad_I2C keypad(makeKeymap(hexaKeys), rowPins, colPins, ROWS, COLS, KEYPAD_ADD
 
 String inputPassword = "";
 
-// state ของ UID
 enum UIDState {
   UID_STATE_WAIT_CARD,
   UID_STATE_WAIT_PASSWORD
@@ -75,14 +74,12 @@ void loop() {
       String total = payload.substring(secondComma+1);
 
       lcd.clear();
-      // แถว 0 → แสดง total
       lcd.setCursor(0,0);
       lcd.print("Total:");
       int colTotal = 16 - total.length();
       lcd.setCursor(colTotal,0);
       lcd.print(total);
 
-      // แถว 1 → แสดงสินค้า + ราคา
       lcd.setCursor(0,1);
       lcd.print(product);
       int colPrice = 16 - price.length();
@@ -108,14 +105,12 @@ void loop() {
     }
 
     else if (msg == "PAYMENT SUCCESS") {
-      // ✅ เสียงติ๊ด 2 ครั้ง
       for (int i=0; i<2; i++) {
         tone(BUZZER_PIN, 1200);
         delay(200);
         noTone(BUZZER_PIN);
         delay(150);
       }
-
       lcd.clear();
       lcd.setCursor(0,0);
       lcd.print("Payment Success!");
@@ -127,9 +122,24 @@ void loop() {
       uidState = UID_STATE_WAIT_CARD;
     }
 
-    else if (msg == "FAIL") {
-      // ❌ Password ผิด หรือ เครดิตไม่พอ
-      tone(BUZZER_PIN, 400);   // เสียงผิดพลาด
+    else if (msg == "FAIL_UID") {
+      tone(BUZZER_PIN, 400);
+      delay(1000);
+      noTone(BUZZER_PIN);
+
+      lcd.clear();
+      lcd.setCursor(0,0);
+      lcd.print("Card not found");
+      delay(1500);
+
+      lcd.clear();
+      lcd.setCursor(0,0);
+      lcd.print("Tap your Card");
+      uidState = UID_STATE_WAIT_CARD;
+    }
+
+    else if (msg == "FAIL_PWD") {
+      tone(BUZZER_PIN, 400);
       delay(1000);
       noTone(BUZZER_PIN);
 
@@ -138,17 +148,10 @@ void loop() {
       lcd.print("Wrong Password");
       delay(1500);
 
-      if (uidMode) {
-        lcd.clear();
-        lcd.setCursor(0,0);
-        lcd.print("Enter Password:");
-        uidState = UID_STATE_WAIT_PASSWORD;
-      } else {
-        lcd.clear();
-        lcd.setCursor(0,0);
-        lcd.print("Tap your Card");
-        uidState = UID_STATE_WAIT_CARD;
-      }
+      lcd.clear();
+      lcd.setCursor(0,0);
+      lcd.print("Enter Password:");
+      uidState = UID_STATE_WAIT_PASSWORD;
     }
   }
 
@@ -156,7 +159,6 @@ void loop() {
   if (uidMode) {
     if (uidState == UID_STATE_WAIT_CARD) {
       if (mfrc522.PICC_IsNewCardPresent() && mfrc522.PICC_ReadCardSerial()) {
-        // ✅ เจอการ์ด RFID → เสียงติ๊ด
         tone(BUZZER_PIN, 1000);
         delay(500);
         noTone(BUZZER_PIN);
