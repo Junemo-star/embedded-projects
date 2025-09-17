@@ -12,7 +12,6 @@ creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", sco
 client = gspread.authorize(creds)
 sheet = client.open_by_key(SHEET_ID).worksheet(SHEET_NAME)
 
-
 def add_new_product(barcode, name, price, qty):
     """เพิ่มสินค้าใหม่ลง Google Sheet"""
     try:

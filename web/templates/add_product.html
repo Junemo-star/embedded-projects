@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Add Product - POS System</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+  <style>
+    html, body { height: 100%; margin: 0; overflow: hidden; }
+    body { background: #f0f6fb; font-family: Arial, sans-serif; }
+    .pos-header { background: #1976d2; color: white; padding: 10px; height: 60px; }
+    .pos-header h2 { margin: 0; font-size: 20px; }
+    .pos-main { display: flex; height: calc(100% - 90px); }
+    .pos-sidebar { background: #1565c0; color: white; padding: 15px; width: 220px; }
+    .pos-sidebar button, .pos-sidebar a { width: 100%; margin-bottom: 10px; }
+    .pos-content { flex: 1; padding: 15px; display: flex; flex-direction: column; }
+    .product-table { flex: 1; overflow-y: auto; }
+    .pos-status { background: #0d47a1; color: white; padding: 8px; font-size: 14px; height: 30px; }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <div class="pos-header d-flex justify-content-between align-items-center">
+    <h2>ADD PRODUCT</h2>
+    <div>
+      <strong>Time:</strong> {{ now }} |
+      <strong>User:</strong> Admin |
+    </div>
+  </div>
+
+  <!-- Main -->
+  <div class="pos-main">
+    <!-- Sidebar -->
+    <div class="pos-sidebar">
+      <a href="/" class="btn btn-light">⬅ Back to POS</a>
+      <a href="/add_product" class="btn btn-success">➕ Add Product</a>
+      <a href="/sales" class="btn btn-info">📑 Sales History</a>
+    </div>
+
+    <!-- Content -->
+    <div class="pos-content">
+      <h3>เพิ่มสินค้าใหม่ / อัปเดตสินค้า</h3>
+      <form method="POST" action="/add_product" class="row g-2 mb-4">
+        <div class="col-md-3">
+          <input type="text" id="newBarcode" name="barcode" class="form-control" placeholder="Barcode" required>
+        </div>
+        <div class="col-md-3">
+          <input type="text" id="newName" name="name" class="form-control" placeholder="ชื่อสินค้า">
+        </div>
+        <div class="col-md-2">
+          <input type="number" id="newPrice" name="price" class="form-control" placeholder="ราคา">
+        </div>
+        <div class="col-md-2">
+          <input type="number" name="qty" class="form-control" placeholder="จำนวน" required>
+        </div>
+        <div class="col-md-2">
+          <button type="submit" class="btn btn-success w-100">บันทึก</button>
+        </div>
+      </form>
+
+      <h4>รายการสินค้า</h4>
+      <div class="product-table">
+        <table class="table table-striped">
+          <thead class="table-primary">
+            <tr>
+              <th>Barcode</th>
+              <th>ชื่อสินค้า</th>
+              <th>ราคา</th>
+              <th>จำนวน</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in products %}
+            <tr>
+              <td>{{ p.barcode }}</td>
+              <td>{{ p['product name'] }}</td>
+              <td>{{ p.price }}</td>
+              <td>{{ p.amount }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="pos-status d-flex justify-content-between align-items-center">
+    <div>{{ now }}</div>
+    <div>Total Products: {{ products|length }}</div>
+  </div>
+
+  <script>
+    // ✅ Auto-fill ชื่อ + ราคา ถ้า barcode มีใน products
+    const products = {{ products|tojson }};
+    document.getElementById("newBarcode").addEventListener("input", function(){
+      const bc = this.value.trim();
+      const product = products.find(p => p.barcode == bc);
+      if(product){
+        document.getElementById("newName").value = product["product name"];
+        document.getElementById("newPrice").value = product.price;
+      } else {
+        document.getElementById("newName").value = "";
+        document.getElementById("newPrice").value = "";
+      }
+    });
+  </script>
+</body>
+</html>

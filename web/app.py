@@ -7,6 +7,7 @@ from googleapiclient.discovery import build
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
+from product_component import add_or_update_product, list_products
 
 # ---------------- Config ----------------
 ser = serial.Serial("/dev/ttyS1", 9600, timeout=1)
@@ -93,7 +94,7 @@ def update_product_amount(barcode, qty):
             if str(row["barcode"]).strip() == str(barcode).strip():
                 old_amount = int(row["amount"])
                 new_amount = max(0, old_amount - qty)
-                sheet_product.update_cell(i,4,new_amount)  # column D = amount
+                sheet_product.update_cell(i,4,new_amount)
                 return True
     except Exception as e:
         print("Update amount error:", e)
@@ -109,6 +110,25 @@ def save_history(user_uid, total_price, cart):
         total_price,
         total_qty
     ])
+
+def list_sales():
+    """ดึงประวัติการขายจาก Google Sheet"""
+    try:
+        data = sheet_history.get_all_records()
+        sales = []
+        for row in data:
+            sales.append({
+                "time": row.get("time"),
+                "order": row.get("oder"),
+                "uid": row.get("user_buy"),
+                "price": row.get("price"),
+                "total_amount": row.get("total_amount")
+            })
+        return sales
+    except Exception as e:
+        print("⚠️ โหลดประวัติการขายไม่สำเร็จ:", e)
+        return []
+
 
 # ---------------- Cart Func ----------------
 def add_to_cart(barcode, name, price):
@@ -135,7 +155,6 @@ def update_cart_qty(barcode, action):
 
 # ---------------- Arduino Update ----------------
 def send_cart_update():
-    """ส่งข้อมูลล่าสุดไปให้ Arduino"""
     if cart:
         last_item = cart[-1]
         ser.write(b"MODE:PRODUCT\n")
@@ -153,8 +172,7 @@ def reset_to_product(clear_cart=True):
     current_uid = None
     current_user = None
     mode = "product"
-    ser.write(b"MODE:PRODUCT\n")
-    ser.flush()
+    send_cart_update()
 
 @app.route("/mode/<target>", methods=["POST"])
 def switch_mode(target):
@@ -167,7 +185,6 @@ def switch_mode(target):
             ser.write(b"MODE:UID\n")
             ser.flush()
     elif target == "cancel":
-        # ❌ ไม่ล้างตะกร้า แค่รีเซ็ตบัตรและกลับไปโหมด UID
         current_uid = None
         current_user = None
         mode = "uid"
@@ -176,7 +193,7 @@ def switch_mode(target):
         ser.flush()
     return redirect(url_for("index"))
 
-# ---------------- Serial Reader Thread ----------------
+# ---------------- Serial Reader ----------------
 def read_serial_loop():
     while True:
         if ser.in_waiting > 0:
@@ -197,14 +214,14 @@ threading.Thread(target=read_serial_loop, daemon=True).start()
 # ---------------- Routes ----------------
 @app.route("/")
 def index():
-    return render_template("index.html", cart=cart, total=total_price, user=current_user, mode=mode)
+    return render_template("index.html", cart=cart, total=total_price, user=current_user, mode=mode,
+                           now=datetime.now().strftime("%Y-%m-%d %H:%M"))
 
 @app.route("/scan", methods=["POST"])
 def scan():
     global total_price, mode
     if mode != "product":
         return redirect(url_for("index"))
-
     code = request.form["barcode"]
     result = find_barcode_online(code)
     if not result.empty:
@@ -221,6 +238,23 @@ def update_cart_route(barcode, action):
     send_cart_update()
     return redirect(url_for("index"))
 
+@app.route("/add_product", methods=["GET", "POST"])
+def add_product():
+    if request.method == "POST":
+        barcode = request.form.get("barcode")
+        name = request.form.get("name")
+        price = request.form.get("price")
+        qty = request.form.get("qty")
+        add_or_update_product(barcode, name, price, qty)
+        return redirect(url_for("add_product"))
+    return render_template("add_product.html", products=list_products(),
+                           user=current_user, now=datetime.now().strftime("%Y-%m-%d %H:%M"))
+
+@app.route("/sales")
+def sales_page():
+    return render_template("sales.html", sales=list_sales(), user=current_user,
+                           now=datetime.now().strftime("%Y-%m-%d %H:%M"))
+
 @socketio.on("auth_user")
 def auth_user(data):
     global current_uid, current_user, cart, total_price, mode
@@ -230,47 +264,37 @@ def auth_user(data):
     user,row = get_user_by_uid(uid)
     if not user:
         emit("auth_result", {"success": False, "msg": "❌ ไม่พบผู้ใช้ กรุณาสแกนใหม่"})
-        ser.write(b"FAIL_UID\n"); ser.flush()
-        mode = "uid"   # ✅ คงรอ UID ต่อ
-        current_uid = None
-        current_user = None
+        # ser.write(b"FAIL_UID\n"); ser.flush()
+        # mode = "uid"
+        switch_mode("cancel")
+        print("test")
         return
 
     if str(user["password"]) != str(pwd):
         emit("auth_result", {"success": False, "msg": "❌ รหัสผิด กรุณาลองใหม่"})
         ser.write(b"FAIL_PWD\n"); ser.flush()
-        mode = "uid"   # ✅ คงรอรหัสต่อ
-        current_uid = uid
+        mode = "uid"
         return
 
     if float(user["credit"]) < total_price:
         emit("auth_result", {"success": False, "msg": "❌ เครดิตไม่พอ กรุณาใช้บัตรอื่น"})
-        ser.write(b"FAIL_CREDIT\n"); ser.flush()
-        mode = "uid"   # ✅ คงรอ UID ต่อ
-        current_uid = None
-        current_user = None
+        # ser.write(b"FAIL_CREDIT\n"); 
+        # ser.flush()
+        # mode = "uid"
+        switch_mode("cancel")
         return
 
-    # ✅ รหัสถูก
     current_uid = uid
     current_user = user
-
-    # update credit
     new_credit = float(current_user["credit"]) - total_price
     update_credit(current_user["row"], new_credit)
 
-    # update product amount
     for item in cart:
         update_product_amount(item["barcode"], item["qty"])
 
-    # save history
     save_history(current_uid, total_price, cart)
 
-    # send email
-    order_list = "\n".join([
-        f"- {i['name']} x{i['qty']} = {i['price']*i['qty']}" 
-        for i in cart
-    ])
+    order_list = "\n".join([f"- {i['name']} x{i['qty']} = {i['price']*i['qty']}" for i in cart])
     receipt = f"""
 🧾 Receipt
 --------------------------
@@ -286,10 +310,7 @@ Thank you for shopping!
 """
     send_email(current_user["email"], "Receipt - POS System", receipt)
 
-    # ส่งสัญญาณกลับไป Arduino
     ser.write(b"PAYMENT SUCCESS\n"); ser.flush()
-
-    # reset → ตะกร้าว่างหลังจ่ายเสร็จ
     reset_to_product(clear_cart=True)
     emit("auth_result", {"success": True, "msg": f"✅ จ่ายเรียบร้อย (คุณ {user['name']})"})
 

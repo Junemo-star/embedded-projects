@@ -1,104 +1,177 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>POS System</title>
+  <title>Pos System</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
   <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+      overflow: hidden; /* ❌ ปิด scroll ทั้งหน้า */
+    }
+    body { background: #f0f6fb; font-family: Arial, sans-serif; }
+
+    .pos-header { background: #1976d2; color: white; padding: 10px; height: 60px; }
+    .pos-header h2 { margin: 0; font-size: 20px; }
+
+    .pos-main { display: flex; height: calc(100% - 90px); } /* Header + Footer */
+    .sidebar { background: #1565c0; color: white; padding: 15px; width: 220px; }
+    .sidebar .btn { width: 100%; margin-bottom: 10px; }
+
+    .content { flex: 1; padding: 15px; display: flex; flex-direction: column; }
+    .cart-container { flex: 1; display: flex; flex-direction: column; }
+    .cart-table { flex: 1; overflow-y: auto; } /* scroll แค่ในตาราง */
+
+    .pos-status { background: #0d47a1; color: white; padding: 8px; font-size: 14px; height: 30px; }
+    table th, table td { vertical-align: middle; }
+  </style>
 </head>
-<body class="p-4">
-  <h1>POS System</h1>
+<body>
+  <!-- Header -->
+  <div class="pos-header d-flex justify-content-between align-items-center">
+    <h2>KaiTodNongKing System</h2>
+    <div>
+      <strong>Time:</strong> {{ now }} |
+      <strong>User:</strong> Admin |
+      <strong>Total:</strong> {{total}}
+    </div>
+  </div>
 
-  <!-- ปุ่มควบคุมโหมด -->
-  <h3>โหมดการทำงาน</h3>
-  <form method="POST" action="/mode/product" style="display:inline">
-    <button type="submit" class="btn btn-info" {% if mode=="product" %}disabled{% endif %}>
-      🛒 โหมดสินค้า
-    </button>
-  </form>
+  <!-- Main Layout -->
+  <div class="pos-main">
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <a href="/" class="btn btn-light">🛒 Cart</a>
+      <form method="POST" action="/mode/uid">
+        <button type="submit" class="btn btn-warning" {% if cart|length == 0 %}disabled{% endif %}>
+          💳 Checkout
+        </button>
+      </form>
+      <form method="POST" action="/mode/cancel">
+        <button type="submit" class="btn btn-danger" {% if mode!="uid" %}disabled{% endif %}>
+          ❌ Cancel Payment
+        </button>
+      </form>
+      <a href="/add_product" class="btn btn-success">➕ Add Product</a>
+      <a href="/sales" class="btn btn-info">📑 Sales History</a>
+    </div>
 
-  <form method="POST" action="/mode/uid" style="display:inline">
-    <button type="submit" class="btn btn-warning"
-            {% if mode=="uid" %}disabled{% endif %}
-            {% if cart|length == 0 %}disabled{% endif %}>
-      💳 รออ่านบัตร
-    </button>
-  </form>
+    <!-- Content -->
+    <div class="content">
+      <div class="cart-container">
+        <h3>Cart</h3>
 
-  <form method="POST" action="/mode/cancel" style="display:inline">
-    <button type="submit" class="btn btn-danger"
-            {% if mode!="uid" %}disabled{% endif %}>
-      ❌ ยกเลิกการจ่าย
-    </button>
-  </form>
-  <hr>
+        <!-- 🔹 ช่องสแกนบาร์โค้ด -->
+        <form method="POST" action="/scan" class="mb-3 d-flex">
+          <input type="text" id="barcodeInput" name="barcode"
+                 placeholder="Scan barcode" class="form-control me-2" required autofocus>
+          <button type="submit" class="btn btn-primary">Add</button>
+        </form>
 
-  {% if mode == "product" %}
-  <!-- ฟอร์มสแกนบาร์โค้ด -->
-  <form method="POST" action="/scan" class="mb-3">
-    <input type="text" id="barcodeInput" name="barcode" placeholder="Scan barcode"
-           class="form-control" required autofocus>
-    <button type="submit" class="btn btn-primary mt-2">Add</button>
-  </form>
-  {% endif %}
-
-  <!-- แสดงตะกร้า -->
-  <h3>Cart</h3>
-  <ul class="list-group">
-    {% for item in cart %}
-      <li class="list-group-item d-flex justify-content-between align-items-center">
-        {{item.name}} x{{item.qty}} = {{item.price * item.qty}}
-        <div>
-          <form method="POST" action="/cart/update/{{item.barcode}}/add" style="display:inline">
-            <button type="submit" class="btn btn-sm btn-success">+</button>
-          </form>
-          <form method="POST" action="/cart/update/{{item.barcode}}/remove" style="display:inline">
-            <button type="submit" class="btn btn-sm btn-danger">−</button>
-          </form>
+        <div class="cart-table">
+          <table class="table table-bordered table-striped">
+            <thead class="table-primary">
+              <tr>
+                <th>Barcode</th>
+                <th>Description</th>
+                <th>Qty</th>
+                <th>Price</th>
+                <th>Total</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in cart %}
+              <tr>
+                <td>{{item.barcode}}</td>
+                <td>{{item.name}}</td>
+                <td>{{item.qty}}</td>
+                <td>{{item.price}}</td>
+                <td>{{item.price * item.qty}}</td>
+                <td>
+                  <form method="POST" action="/cart/update/{{item.barcode}}/add" style="display:inline">
+                    <button type="submit" class="btn btn-sm btn-success">+</button>
+                  </form>
+                  <form method="POST" action="/cart/update/{{item.barcode}}/remove" style="display:inline">
+                    <button type="submit" class="btn btn-sm btn-danger">−</button>
+                  </form>
+                </td>
+              </tr>
+              {% else %}
+              <tr>
+                <td colspan="6" class="text-center text-muted">ยังไม่มีสินค้าในตะกร้า</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
         </div>
-      </li>
-    {% endfor %}
-  </ul>
-  <h4>Total: {{total}}</h4>
 
-  {% if mode == "uid" %}
-  <h3>เข้าสู่โหมด UID</h3>
-  <p id="status">รออ่านบัตร...</p>
-  {% endif %}
+        <h1 class="text-end">TOTAL: {{total}}</h1>
+        {% if mode == "uid" %}
+        <div class="alert alert-info mt-3">รออ่านบัตร...</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="pos-status d-flex justify-content-between align-items-center">
+    <div>{{ now }}</div>
+    <div>Item count: {{ cart|length }}</div>
+  </div>
 
   <script>
-    const socket = io();
-    let currentUID = null;
+    // const now = new Date();
+    // const formatted = now.getFullYear() + "-" +
+    //                 String(now.getMonth()+1).padStart(2,'0') + "-" +
+    //                 String(now.getDate()).padStart(2,'0');
+    // document.getElementById("docDate").innerText = formatted;
 
+    // const socket = io();
+    // let currentUID = null;
+
+    // จัดการ UID
     socket.on("uid_detected", data => {
       currentUID = data.uid;
-      if(data.name){
-        document.getElementById("status").innerText =
-          "👤 ผู้ใช้: " + data.name + " → รอรหัสผ่าน...";
-      } else {
-        document.getElementById("status").innerText =
-          "❌ ไม่พบผู้ใช้ (UID: " + currentUID + ")";
+      const statusEl = document.querySelector(".alert-info");
+      if(statusEl){
+        if(data.name){
+          statusEl.innerText = "👤 ผู้ใช้: " + data.name + " → รอรหัสผ่าน...";
+        } else {
+          statusEl.innerText = "❌ ไม่พบผู้ใช้ (UID: " + currentUID + ")";
+        }
       }
     });
 
+    // จัดการ Password
     socket.on("pwd_detected", data => {
       if(currentUID){
         socket.emit("auth_user", {uid: currentUID, password: data.password});
       }
     });
 
+    // Auth Result
     socket.on("auth_result", data => {
       alert(data.msg);
       if(data.success){
         window.location.href = "/";
       } else {
-        document.getElementById("status").innerText =
-          "❌ " + data.msg + " → รอใหม่...";
+        const statusEl = document.querySelector(".alert-info");
+        if(statusEl){
+          statusEl.innerText = "❌ " + data.msg + " → รอใหม่...";
+        }
       }
     });
 
-    // Autofocus ช่องสแกนบาร์โค้ด
+    // Autofocus + Clear ช่องสแกนบาร์โค้ด
     const barcodeInput = document.getElementById("barcodeInput");
-    if(barcodeInput){ barcodeInput.focus(); }
+    if(barcodeInput){
+      barcodeInput.focus();
+      document.querySelector("form[action='/scan']").addEventListener("submit", () => {
+        setTimeout(() => { barcodeInput.value = ""; barcodeInput.focus(); }, 100);
+      });
+    }
   </script>
 </body>
 </html>
