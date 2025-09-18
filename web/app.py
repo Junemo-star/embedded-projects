@@ -187,10 +187,11 @@ def switch_mode(target):
     elif target == "cancel":
         current_uid = None
         current_user = None
-        mode = "uid"
-        ser.write(b"CANCEL PAYMENT\n")
-        ser.write(b"MODE:UID\n")
-        ser.flush()
+        # mode = "uid"
+        # ser.write(b"CANCEL PAYMENT\n")
+        # ser.write(b"MODE:UID\n")
+        # ser.flush()
+        reset_to_product(clear_cart=False) 
     return redirect(url_for("index"))
 
 # ---------------- Serial Reader ----------------
@@ -296,18 +297,18 @@ def auth_user(data):
 
     order_list = "\n".join([f"- {i['name']} x{i['qty']} = {i['price']*i['qty']}" for i in cart])
     receipt = f"""
-🧾 Receipt
---------------------------
-UID: {current_uid}
-Name: {current_user['name']}
-Items:
-{order_list}
+            🧾 Receipt
+            --------------------------
+            UID: {current_uid}
+            Name: {current_user['name']}
+            Items:
+            {order_list}
 
-Total: {total_price}
-Remaining Credit: {new_credit}
---------------------------
-Thank you for shopping!
-"""
+            Total: {total_price}
+            Remaining Credit: {new_credit}
+            --------------------------
+            Thank you for shopping!
+            """
     send_email(current_user["email"], "Receipt - POS System", receipt)
 
     ser.write(b"PAYMENT SUCCESS\n"); ser.flush()

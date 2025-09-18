@@ -42,20 +42,25 @@
   <div class="pos-main">
     <!-- Sidebar -->
     <div class="sidebar">
-      <a href="/" class="btn btn-light">🛒 Cart</a>
-      <form method="POST" action="/mode/uid">
-        <button type="submit" class="btn btn-warning" {% if cart|length == 0 %}disabled{% endif %}>
-          💳 Checkout
-        </button>
-      </form>
-      <form method="POST" action="/mode/cancel">
-        <button type="submit" class="btn btn-danger" {% if mode!="uid" %}disabled{% endif %}>
-          ❌ Cancel Payment
-        </button>
-      </form>
-      <a href="/add_product" class="btn btn-success">➕ Add Product</a>
-      <a href="/sales" class="btn btn-info">📑 Sales History</a>
+  <a href="/" class="btn btn-light {% if mode=='uid' %}disabled{% endif %}">🛒 Cart</a>
+
+  <form method="POST" action="/mode/uid">
+    <button type="submit" class="btn btn-warning" 
+            {% if cart|length == 0 or mode=='uid' %}disabled{% endif %}>
+      💳 Checkout
+    </button>
+  </form>
+
+  <form method="POST" action="/mode/cancel">
+    <button type="submit" class="btn btn-danger" {% if mode!="uid" %}disabled{% endif %}>
+      ❌ Cancel Payment
+    </button>
+  </form>
+
+  <a href="/add_product" class="btn btn-success {% if mode=='uid' %}disabled{% endif %}">➕ Add Product</a>
+  <a href="/sales" class="btn btn-info {% if mode=='uid' %}disabled{% endif %}">📑 Sales History</a>
     </div>
+
 
     <!-- Content -->
     <div class="content">
@@ -122,14 +127,8 @@
   </div>
 
   <script>
-    // const now = new Date();
-    // const formatted = now.getFullYear() + "-" +
-    //                 String(now.getMonth()+1).padStart(2,'0') + "-" +
-    //                 String(now.getDate()).padStart(2,'0');
-    // document.getElementById("docDate").innerText = formatted;
-
-    // const socket = io();
-    // let currentUID = null;
+    const socket = io();
+    let currentUID = null;
 
     // จัดการ UID
     socket.on("uid_detected", data => {
