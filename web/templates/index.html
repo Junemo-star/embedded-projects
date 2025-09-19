@@ -70,8 +70,14 @@
         <!-- 🔹 ช่องสแกนบาร์โค้ด -->
         <form method="POST" action="/scan" class="mb-3 d-flex">
           <input type="text" id="barcodeInput" name="barcode"
-                 placeholder="Scan barcode" class="form-control me-2" required autofocus>
-          <button type="submit" class="btn btn-primary">Add</button>
+                placeholder="Scan barcode"
+                class="form-control me-2"
+                {% if mode == "uid" %}disabled{% endif %}
+                required autofocus>
+          <button type="submit" class="btn btn-primary"
+                  {% if mode == "uid" %}disabled{% endif %}>
+            Add
+          </button>
         </form>
 
         <div class="cart-table">
