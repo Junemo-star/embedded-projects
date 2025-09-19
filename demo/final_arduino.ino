@@ -175,7 +175,11 @@ void loop() {
         lcd.setCursor(0,0);
         lcd.print("Enter Password:");
         uidState = UID_STATE_WAIT_PASSWORD;
+
+        mfrc522.PICC_HaltA();
+        mfrc522.PCD_StopCrypto1();
       }
+      
     }
     else if (uidState == UID_STATE_WAIT_PASSWORD) {
       char key = keypad.getKey();
