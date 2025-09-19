@@ -101,13 +101,15 @@
                 <td>{{item.price}}</td>
                 <td>{{item.price * item.qty}}</td>
                 <td>
-                  <form method="POST" action="/cart/update/{{item.barcode}}/add" style="display:inline">
-                    <button type="submit" class="btn btn-sm btn-success">+</button>
-                  </form>
-                  <form method="POST" action="/cart/update/{{item.barcode}}/remove" style="display:inline">
-                    <button type="submit" class="btn btn-sm btn-danger">−</button>
-                  </form>
-                </td>
+                <form method="POST" action="/cart/update/{{item.barcode}}/add" style="display:inline">
+                  <button type="submit" class="btn btn-sm btn-success"
+                          {% if mode == "uid" %}disabled{% endif %}>+</button>
+                </form>
+                <form method="POST" action="/cart/update/{{item.barcode}}/remove" style="display:inline">
+                  <button type="submit" class="btn btn-sm btn-danger"
+                          {% if mode == "uid" %}disabled{% endif %}>−</button>
+                </form>
+              </td>
               </tr>
               {% else %}
               <tr>
