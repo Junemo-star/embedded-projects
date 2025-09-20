@@ -17,6 +17,8 @@ sudo ./venv/bin/python <ชื่อ file>
 ## คำสั่งเข้า ssh ใน odroid
 ```
 ssh -o ExitOnForwardFailure=no -o LogLevel=ERROR -L 8080:127.0.0.1:5000 odroid@<ip odroid>
+ssh -o ExitOnForwardFailure=no -o LogLevel=ERROR -L 8080:127.0.0.1:5000 odroid@odroid.local
+
 ```
 
 ## คำสั่ง shutdown odroid
