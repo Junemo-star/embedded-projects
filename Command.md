@@ -23,3 +23,8 @@ ssh -o ExitOnForwardFailure=no -o LogLevel=ERROR -L 8080:127.0.0.1:5000 odroid@<
 ```
 sudo shutdown -h now
 ```
+
+## คำสั่ง check port
+```
+lsof /dev/ttyS1
+```

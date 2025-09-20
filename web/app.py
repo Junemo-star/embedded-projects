@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for
 from flask_socketio import SocketIO, emit
-import serial, pandas as pd, urllib.parse, gspread, os, base64, threading
+import serial, pandas as pd, urllib.parse, gspread, os, base64, threading, time, signal, sys
 from datetime import datetime
 from email.mime.text import MIMEText
 from googleapiclient.discovery import build
@@ -49,7 +49,7 @@ mode = "product"
 
 # ---------------- Flask ----------------
 app = Flask(__name__)
-socketio = SocketIO(app)
+socketio = SocketIO(app, async_mode="threading")  # ✅ ใช้ threading mode
 
 # ---------------- Gmail Func ----------------
 def send_email(to, subject, body):
@@ -78,23 +78,23 @@ def find_barcode_online(barcode):
 
 def get_user_by_uid(uid):
     data = sheet_user.get_all_records()
-    for i,row in enumerate(data,start=2):
-        if str(row["uid"]).replace(" ","").upper() == uid.replace(" ","").upper():
+    for i, row in enumerate(data, start=2):
+        if str(row["uid"]).replace(" ", "").upper() == uid.replace(" ", "").upper():
             row["row"] = i
-            return row,i
-    return None,None
+            return row, i
+    return None, None
 
-def update_credit(row,new_credit):
-    sheet_user.update_cell(row,3,new_credit)
+def update_credit(row, new_credit):
+    sheet_user.update_cell(row, 3, new_credit)
 
 def update_product_amount(barcode, qty):
     try:
         data = sheet_product.get_all_records()
-        for i,row in enumerate(data,start=2):
+        for i, row in enumerate(data, start=2):
             if str(row["barcode"]).strip() == str(barcode).strip():
                 old_amount = int(row["amount"])
                 new_amount = max(0, old_amount - qty)
-                sheet_product.update_cell(i,4,new_amount)
+                sheet_product.update_cell(i, 4, new_amount)
                 return True
     except Exception as e:
         print("Update amount error:", e)
@@ -128,7 +128,6 @@ def list_sales():
     except Exception as e:
         print("⚠️ โหลดประวัติการขายไม่สำเร็จ:", e)
         return []
-
 
 # ---------------- Cart Func ----------------
 def add_to_cart(barcode, name, price):
@@ -187,28 +186,33 @@ def switch_mode(target):
     elif target == "cancel":
         current_uid = None
         current_user = None
-        # mode = "uid"
-        # ser.write(b"CANCEL PAYMENT\n")
-        # ser.write(b"MODE:UID\n")
-        # ser.flush()
-        reset_to_product(clear_cart=False) 
+        reset_to_product(clear_cart=False)
     return redirect(url_for("index"))
 
 # ---------------- Serial Reader ----------------
 def read_serial_loop():
     while True:
-        if ser.in_waiting > 0:
-            line = ser.readline().decode(errors="ignore").strip()
-            if line.startswith("UID:"):
-                uid = line[4:]
-                user, _ = get_user_by_uid(uid)
-                if user:
-                    socketio.emit("uid_detected", {"uid": uid, "name": user["name"]})
-                else:
-                    socketio.emit("uid_detected", {"uid": uid, "name": None})
-            elif line.startswith("PWD:"):
-                pwd = line[4:]
-                socketio.emit("pwd_detected", {"password": pwd})
+        try:
+            if ser.in_waiting > 0:
+                line = ser.readline().decode(errors="ignore").strip()
+                if not line:
+                    continue
+                if line.startswith("UID:"):
+                    uid = line[4:]
+                    user, _ = get_user_by_uid(uid)
+                    if user:
+                        socketio.emit("uid_detected", {"uid": uid, "name": user["name"]})
+                    else:
+                        socketio.emit("uid_detected", {"uid": uid, "name": None})
+                elif line.startswith("PWD:"):
+                    pwd = line[4:]
+                    socketio.emit("pwd_detected", {"password": pwd})
+        except serial.SerialException as e:
+            print("⚠️ Serial error:", e)
+            time.sleep(1)
+        except Exception as e:
+            print("⚠️ Unexpected error:", e)
+            time.sleep(1)
 
 threading.Thread(target=read_serial_loop, daemon=True).start()
 
@@ -262,13 +266,10 @@ def auth_user(data):
     uid = data.get("uid")
     pwd = data.get("password")
 
-    user,row = get_user_by_uid(uid)
+    user, row = get_user_by_uid(uid)
     if not user:
         emit("auth_result", {"success": False, "msg": "❌ ไม่พบผู้ใช้ กรุณาสแกนใหม่"})
-        # ser.write(b"FAIL_UID\n"); ser.flush()
-        # mode = "uid"
         switch_mode("cancel")
-        print("test")
         return
 
     if str(user["password"]) != str(pwd):
@@ -279,9 +280,6 @@ def auth_user(data):
 
     if float(user["credit"]) < total_price:
         emit("auth_result", {"success": False, "msg": "❌ เครดิตไม่พอ กรุณาใช้บัตรอื่น"})
-        # ser.write(b"FAIL_CREDIT\n"); 
-        # ser.flush()
-        # mode = "uid"
         switch_mode("cancel")
         return
 
@@ -315,5 +313,21 @@ def auth_user(data):
     reset_to_product(clear_cart=True)
     emit("auth_result", {"success": True, "msg": f"✅ จ่ายเรียบร้อย (คุณ {user['name']})"})
 
+# ---------------- Graceful Shutdown ----------------
+def shutdown_handler(sig, frame):
+    print("\n🛑 Shutting down server...")
+    try:
+        if ser and ser.is_open:
+            ser.close()
+            print("🔌 Serial port closed")
+    except Exception as e:
+        print("⚠️ Error closing serial:", e)
+    sys.exit(0)
+
+signal.signal(signal.SIGINT, shutdown_handler)   # Ctrl+C
+signal.signal(signal.SIGTERM, shutdown_handler)  # kill
+
+# ---------------- Main ----------------
 if __name__ == "__main__":
+    print("🚀 Starting Flask-SocketIO server on http://0.0.0.0:5000")
     socketio.run(app, host="0.0.0.0", port=5000)
