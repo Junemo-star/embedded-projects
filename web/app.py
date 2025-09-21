@@ -100,13 +100,15 @@ def update_product_amount(barcode, qty):
         print("Update amount error:", e)
     return False
 
-def save_history(user_uid, total_price, cart):
+def save_history(user_uid, user_name, total_price, cart):
+    """บันทึกประวัติการขาย (เก็บทั้ง UID และชื่อลูกค้า)"""
     order_list = "; ".join([f"{i['name']}x{i['qty']}" for i in cart])
     total_qty = sum([i['qty'] for i in cart])
     sheet_history.append_row([
         datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         order_list,
         user_uid,
+        user_name,
         total_price,
         total_qty
     ])
@@ -119,10 +121,11 @@ def list_sales():
         for row in data:
             sales.append({
                 "time": row.get("time"),
-                "order": row.get("oder"),
-                "uid": row.get("user_buy"),
+                "order": row.get("order"),
+                "uid": row.get("uid"),
+                "customer": row.get("customer_name"),
                 "price": row.get("price"),
-                "total_amount": row.get("total_amount")
+                "total_amount": row.get("total_qty")
             })
         return sales
     except Exception as e:
@@ -257,9 +260,23 @@ def add_product():
 
 @app.route("/sales")
 def sales_page():
-    return render_template("sales.html", sales=list_sales(), user=current_user,
+    sales = list_sales()
+    date_filter = request.args.get("date")
+    keyword = request.args.get("keyword", "").strip()
+    customer = request.args.get("customer", "").strip()
+
+    if date_filter:
+        sales = [s for s in sales if s["time"] and s["time"].startswith(date_filter)]
+    if keyword:
+        sales = [s for s in sales if keyword.lower() in str(s["order"]).lower()]
+    if customer:
+        sales = [s for s in sales if customer.lower() in str(s["uid"]).lower()
+                                   or customer.lower() in str(s["customer"]).lower()]
+
+    return render_template("sales.html", sales=sales, user=current_user,
                            now=datetime.now().strftime("%Y-%m-%d %H:%M"))
 
+# ---------------- Auth / Payment ----------------
 @socketio.on("auth_user")
 def auth_user(data):
     global current_uid, current_user, cart, total_price, mode
@@ -283,35 +300,53 @@ def auth_user(data):
         switch_mode("cancel")
         return
 
+    # ✅ กำหนดค่า
     current_uid = uid
     current_user = user
     new_credit = float(current_user["credit"]) - total_price
-    update_credit(current_user["row"], new_credit)
 
-    for item in cart:
-        update_product_amount(item["barcode"], item["qty"])
-
-    save_history(current_uid, total_price, cart)
-
+    # ✅ เตรียมข้อมูลใบเสร็จ
     order_list = "\n".join([f"- {i['name']} x{i['qty']} = {i['price']*i['qty']}" for i in cart])
     receipt = f"""
-            🧾 Receipt
-            --------------------------
-            UID: {current_uid}
-            Name: {current_user['name']}
-            Items:
-            {order_list}
+    🧾 Receipt
+    --------------------------
+    UID: {current_uid}
+    Name: {current_user['name']}
+    Items:
+    {order_list}
 
-            Total: {total_price}
-            Remaining Credit: {new_credit}
-            --------------------------
-            Thank you for shopping!
-            """
-    send_email(current_user["email"], "Receipt - POS System", receipt)
+    Total: {total_price}
+    Remaining Credit: {new_credit}
+    --------------------------
+    Thank you for shopping!
+    """
 
+    # ✅ ทำ snapshot ก่อน reset (กัน current_user/cart หาย)
+    user_snapshot = user.copy()
+    cart_snapshot = cart.copy()
+    total_price_snapshot = total_price
+
+    # ✅ ตอบกลับลูกค้าทันที
+    emit("auth_result", {"success": True, "msg": f"✅ จ่ายเรียบร้อย (คุณ {user['name']})"})
     ser.write(b"PAYMENT SUCCESS\n"); ser.flush()
     reset_to_product(clear_cart=True)
-    emit("auth_result", {"success": True, "msg": f"✅ จ่ายเรียบร้อย (คุณ {user['name']})"})
+
+    # ✅ ทำงานช้าใน background
+    def finalize_payment(cart_snapshot, user_snapshot, new_credit_value, receipt_text, total_price_snapshot):
+        try:
+            update_credit(user_snapshot["row"], new_credit_value)
+            for item in cart_snapshot:
+                update_product_amount(item["barcode"], item["qty"])
+            save_history(user_snapshot["uid"], user_snapshot["name"], total_price_snapshot, cart_snapshot)
+            send_email(user_snapshot["email"], "Receipt - POS System", receipt_text)
+        except Exception as e:
+            print("⚠️ Error in finalize_payment:", e)
+
+    threading.Thread(
+        target=finalize_payment,
+        args=(cart_snapshot, user_snapshot, new_credit, receipt, total_price_snapshot)
+    ).start()
+
 
 # ---------------- Graceful Shutdown ----------------
 def shutdown_handler(sig, frame):
