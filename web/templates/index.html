@@ -34,6 +34,12 @@
 
     .pos-status { background: #0d47a1; color: white; padding: 8px; font-size: 14px; height: 30px; }
     table th, table td { vertical-align: middle; }
+
+    .big-text {
+      font-size: 80px;
+      font-weight: bold;
+      text-align: right;
+    }
   </style>
 </head>
 <body>
@@ -128,7 +134,7 @@
           </table>
         </div>
 
-        <h1 class="text-end">TOTAL: {{total}}</h1>
+        <div class="big-text">TOTAL: {{total}}</div>
         {% if mode == "uid" %}
         <div class="alert alert-info mt-3">รออ่านบัตร...</div>
         {% endif %}
