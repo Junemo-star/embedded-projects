@@ -1,14 +1,18 @@
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+import config  
 
-SHEET_ID = "1hG39pDzG4SwE7bt25cvD9KzF4K9K4pYq302sGu5eWOg"
-PRODUCT_SHEET = "product"
+# ---------------- Config ----------------
+SHEET_ID = config.SHEET_ID
+PRODUCT_SHEET = config.PRODUCT_SHEET
+SCOPE = config.SCOPE  
 
-scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
+# ---------------- Google Auth ----------------
+creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", SCOPE)
 client = gspread.authorize(creds)
 sheet_product = client.open_by_key(SHEET_ID).worksheet(PRODUCT_SHEET)
 
+# ---------------- Product Functions ----------------
 def add_or_update_product(barcode, name=None, price=None, qty=None):
     try:
         barcode = str(barcode).strip()
@@ -24,7 +28,10 @@ def add_or_update_product(barcode, name=None, price=None, qty=None):
                     sheet_product.update_cell(i, 4, new_qty)
                 return True
         if name and price and qty:
-            sheet_product.append_row([barcode, name, int(price), int(qty)], value_input_option="RAW")
+            sheet_product.append_row(
+                [barcode, name, int(price), int(qty)],
+                value_input_option="RAW"
+            )
             return True
         return False
     except Exception as e:

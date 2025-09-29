@@ -8,8 +8,8 @@
 #include <LiquidCrystal_I2C.h>
 
 // ---------- Serial ----------
-#define RX_PIN 4 // D4 = RX (รับจาก Odroid TX)
-#define TX_PIN 3 // D3 = TX (ส่งไป Odroid RX)
+#define RX_PIN 4 
+#define TX_PIN 3 
 SoftwareSerial odroidSerial(RX_PIN, TX_PIN);
 
 // ---------- RFID ----------
@@ -61,7 +61,7 @@ UIDState uidState = UID_STATE_WAIT_CARD;
 // ---------- Helper EEPROM ----------
 void saveAddr()
 {
-  EEPROM.put(0, addr); // บันทึก pointer ล่าสุดไว้ที่ addr 0
+  EEPROM.put(0, addr); 
 }
 
 void loadAddr()
@@ -69,7 +69,7 @@ void loadAddr()
   EEPROM.get(0, addr);
   if (addr < 2 || addr >= EEPROM.length())
   {
-    addr = 2; // ป้องกันค่าเพี้ยน
+    addr = 2; 
   }
 }
 
